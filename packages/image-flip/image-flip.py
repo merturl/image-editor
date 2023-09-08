@@ -31,3 +31,5 @@ for image_file in image_files:
         print(f"{image_file} 수정 및 저장 완료.")
     else:
         print(f"이미지를 읽어올 수 없습니다: {image_file}")
+
+print(123)
