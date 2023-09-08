@@ -1,2 +1,3 @@
-# image-crop
-image-crop for game assets
+# image-editor
+
+image-editor for game assets
