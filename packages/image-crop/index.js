@@ -94,8 +94,31 @@ class SpriteSheetExtractor {
     // Ensure output directory exists
     await fs.mkdir(path.dirname(outputFilePath), { recursive: true });
 
-    // Extract and save sprite if file doesn't exist
     try {
+      // Extract the sprite
+      const extractedImage = sharp(imagePath)
+        .extract({ left, top, width, height })
+        .raw(); // Get raw pixel data
+
+      // Check if the extracted image is all black
+      const { data, info } = await extractedImage.toBuffer({
+        resolveWithObject: true,
+      });
+
+      let isBlack = true;
+      for (let i = 0; i < data.length; i += info.channels) {
+        if (data[i] !== 0 || data[i + 1] !== 0 || data[i + 2] !== 0) {
+          isBlack = false;
+          break; // Found a non-black pixel
+        }
+      }
+
+      if (isBlack) {
+        console.log(`Skipping black image for ${outputFilePath}`);
+        return; // Skip saving this file if it's all black
+      }
+
+      // Save the sprite if not black
       if (!(await this.fileExists(outputFilePath))) {
         await sharp(imagePath)
           .extract({ left, top, width, height })
