@@ -15,6 +15,7 @@ class SpriteSheetExtractor {
       "Thrust",
       "Walk",
       "Shoot",
+      "Cast",
     ];
 
     // Default animation areas (can be overridden in constructor)
