@@ -1,26 +1,128 @@
 import { glob } from "glob";
 import path from "path";
-import fs from "fs";
+import fs from "fs/promises";
 import sharp from "sharp";
-// 스프라이트 시트 폴더 경로 패턴
-const spriteSheetPattern = "spritesheets/**/*/move.png";
-const images = await glob(spriteSheetPattern, { ignore: "node_modules/**" });
 
-for (const image of images) {
-  if (path.basename(image) === "move.png") {
-    const idleFilePath = path.join(path.dirname(image), `idle.png`);
-    if (!fs.existsSync(idleFilePath)) {
-      sharp(image)
-        .extract({ left: 0, top: 0, width: 64, height: 64 * 4 })
-        .toFile(idleFilePath, (err) => {
-          if (err) {
-            console.error("이미지 자르기 오류:", err);
-          } else {
-            console.log(
-              `'${image}' 파일에서 '${idleFilePath}'로 이미지 자르기 완료`
-            );
-          }
-        });
+class SpriteSheetExtractor {
+  constructor(config = {}) {
+    this.targets = config.targets || "spritesheets";
+    this.results = config.results || "results";
+    this.spriteSheetPattern =
+      config.spriteSheetPattern || `${this.targets}/**/*/*.png`;
+    this.animations = config.animations || [
+      "Idle",
+      "Slash",
+      "Thrust",
+      "Walk",
+      "Shoot",
+    ];
+
+    // Default animation areas (can be overridden in constructor)
+    this.animationsData = config.animationsData || {
+      Cast: { left: 0, top: 0, width: 64 * 7, height: 64 * 4 },
+      Thrust: { left: 0, top: 64 * 4, width: 64 * 8, height: 64 * 4 },
+      Walk: { left: 0, top: 64 * 8, width: 64 * 9, height: 64 * 4 },
+      Idle: { left: 0, top: 64 * 8, width: 64 * 1, height: 64 * 4 },
+      Slash: { left: 0, top: 64 * 12, width: 64 * 6, height: 64 * 4 },
+      Shoot: { left: 0, top: 64 * 16, width: 64 * 13, height: 64 * 4 },
+    };
+  }
+
+  async extractSprites() {
+    try {
+      const images = await glob(this.spriteSheetPattern, {
+        ignore: "node_modules/**",
+      });
+
+      for (const imagePath of images) {
+        await this.processImage(imagePath);
+      }
+    } catch (error) {
+      console.error("Error extracting sprites:", error);
+    }
+  }
+
+  async processImage(imagePath) {
+    const folderPath = path.dirname(imagePath);
+    const itemName = path.basename(imagePath);
+    const itemParts = itemName.split("/");
+    const itemIdentifier = itemParts[itemParts.length - 1].replace(/\D/g, "");
+
+    // Get image metadata
+    const metadata = await sharp(imagePath).metadata();
+    console.log(`Image size: ${metadata.width}x${metadata.height}`);
+
+    // Process each animation
+    for (const animation of this.animations) {
+      await this.extractAnimationSprite(
+        imagePath,
+        folderPath,
+        animation,
+        itemIdentifier,
+        metadata
+      );
+    }
+  }
+
+  async extractAnimationSprite(
+    imagePath,
+    folderPath,
+    animation,
+    itemIdentifier,
+    metadata
+  ) {
+    const animationArea = this.animationsData[animation];
+    const { left, top, width, height } = animationArea;
+
+    // Validate extraction area
+    if (left + width > metadata.width || top + height > metadata.height) {
+      console.error(
+        `Invalid extraction area for ${imagePath}: ${left}, ${top}, ${width}, ${height}`
+      );
+      return;
+    }
+
+    // Construct output file path
+    const outputFilePath = path.join(
+      folderPath.replace(this.targets, this.results),
+      animation,
+      `${path
+        .basename(folderPath)
+        .toLowerCase()}_${animation.toLowerCase()}_${itemIdentifier}.png`
+    );
+
+    // Ensure output directory exists
+    await fs.mkdir(path.dirname(outputFilePath), { recursive: true });
+
+    // Extract and save sprite if file doesn't exist
+    try {
+      if (!(await this.fileExists(outputFilePath))) {
+        await sharp(imagePath)
+          .extract({ left, top, width, height })
+          .toFile(outputFilePath);
+        console.log(`Extracted ${outputFilePath}`);
+      } else {
+        console.log(`File already exists: ${outputFilePath}`);
+      }
+    } catch (error) {
+      console.error(`Error extracting sprite: ${outputFilePath}`, error);
+    }
+  }
+
+  async fileExists(filePath) {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
     }
   }
 }
+
+// Usage
+async function main() {
+  const extractor = new SpriteSheetExtractor();
+  await extractor.extractSprites();
+}
+
+main().catch(console.error);
